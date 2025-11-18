@@ -32,7 +32,21 @@
     "files": [
       "src/**/*",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      
+      "src/main/main.js",
+      "src/main/preload.js",
+      "src/main/loginPreload.js",
+      
+      "src/renderer/renderer.js",
+      "src/renderer/loginRenderer.js",
+      
+      "src/services/authService.js",
+      
+      "src/views/index.html",
+      "src/views/login.html",
+
+      "tailwind.config.js"
     ],
     "win": {
       "target": "nsis",
