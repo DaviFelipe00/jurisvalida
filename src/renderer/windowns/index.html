@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <!-- CSP FINAL E CORRIGIDA: Adicionado 'unsafe-eval' ao script-src e 'data:' ao connect-src para Tesseract.js/WASM -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net 'unsafe-inline' 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://generativelanguage.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data:; worker-src 'self' blob: https://cdn.jsdelivr.net;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistente de Qualificação e Contratação</title>
+    
+    <link href="./src/output.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.18/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .upload-area.dragover { background-color: #eef2ff; border-color: #4f46e5; }
+        .spinner {
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .file-list-item { display: flex; align-items: center; justify-content: space-between; }
+        .trash-icon { cursor: pointer; color: #9ca3af; }
+        .trash-icon:hover { color: #ef4444; }
+        a[data-disabled="true"] {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Assistente de Qualificação e Contratação</h1>
+            <p class="text-md text-gray-600 mt-2">Faça o upload dos documentos para análise e preenchimento automático da ficha.</p>
+        </header>
+
+        <div id="error-banner" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
+            <strong class="font-bold">Ocorreu um erro!</strong>
+            <span class="block sm:inline" id="error-message"></span>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-md space-y-6">
+                <div>
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2">1. Documentos para Análise</h2>
+                    <div id="analysis-docs" class="space-y-4">
+                        <div id="upload-proposta-container">
+                             <label class="block text-sm font-medium text-gray-700 mb-1">Proposta Comercial <span class="text-red-500">*</span></label>
+                            <div id="upload-proposta" class="upload-area border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50">
+                                <input type="file" id="file-proposta" class="hidden" accept=".pdf,.docx,.txt">
+                                <label for="file-proposta" class="cursor-pointer text-sm">Clique ou arraste o arquivo</label>
+                            </div>
+                            <div id="info-proposta" class="hidden mt-2 text-xs"></div>
+                        </div>
+                        <div id="upload-contrato-container">
+                             <label class="block text-sm font-medium text-gray-700 mb-1">Contrato Social / CCMEI <span class="text-red-500">*</span></label>
+                            <div id="upload-contrato" class="upload-area border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50">
+                                <input type="file" id="file-contrato" class="hidden" accept=".pdf,.docx,.txt">
+                                <label for="file-contrato" class="cursor-pointer text-sm">Clique ou arraste o arquivo</label>
+                            </div>
+                            <div id="info-contrato" class="hidden mt-2 text-xs"></div>
+                        </div>
+                    </div>
+                </div>
+                 <button id="analyze-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center disabled:bg-gray-400" disabled>
+                    <span id="analyze-btn-text">Analisar Documentos</span>
+                    <div id="analyze-spinner" class="hidden spinner"></div>
+                </button>
+                <div id="analysis-status" class="text-sm text-center text-blue-600 font-medium h-5"></div>
+                <div class="mt-2">
+                    <button id="toggle-debug" class="text-sm text-gray-500 hover:text-gray-700 w-full text-left">Mostrar/Ocultar Conteúdo Extraído</button>
+                    <div id="debug-section" class="hidden mt-2 space-y-2">
+                        <div>
+                            <label class="text-xs font-semibold">Texto da Proposta:</label>
+                            <textarea id="debug-proposta" rows="6" class="w-full border rounded-md bg-gray-100 text-xs p-1" readonly></textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold">Texto do Contrato Social:</label>
+                            <textarea id="debug-contrato" rows="6" class="w-full border rounded-md bg-gray-100 text-xs p-1" readonly></textarea>
+                        </div>
+                         <div>
+                            <label class="text-xs font-semibold">Texto do Cartão CNPJ (se anexado):</label>
+                            <textarea id="debug-cnpj" rows="6" class="w-full border rounded-md bg-gray-100 text-xs p-1" readonly></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                <div id="qualification-form" class="space-y-8">
+                    
+                    <fieldset class="border-b pb-6 space-y-4">
+                        <legend class="text-lg font-bold text-blue-800 mb-4">Configurações</legend>
+                        <div>
+                            <label for="api-key-input" class="block text-sm font-medium text-gray-700">Chave da API (Google AI Studio)</label>
+                            <div class="mt-1 flex rounded-md shadow-sm">
+                                <input type="password" id="api-key-input" class="block w-full rounded-none rounded-l-md border-gray-300 px-3 py-2" placeholder="Cole sua chave aqui">
+                                <button id="save-api-key-btn" class="inline-flex items-center rounded-r-md border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 hover:bg-gray-100">Salvar</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Dados do Aplicativo</label>
+                            <button id="open-data-folder-btn" class="mt-1 w-full bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md hover:bg-gray-300 text-sm">Abrir Pasta de Dados</button>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="space-y-4">
+                        <legend class="text-lg font-bold text-blue-800">2. Ficha de Qualificação - Empresa</legend>
+                        <div>
+                            <label for="servico" class="block text-sm font-medium text-gray-700">Serviço</label>
+                            <input type="text" id="servico" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        </div>
+                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                               <label for="razaoSocial" class="block text-sm font-medium text-gray-700">Razão Social</label>
+                               <input type="text" id="razaoSocial" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <div>
+                                <label for="cnpj" class="block text-sm font-medium text-gray-700">CNPJ</label>
+                                <input type="text" id="cnpj" placeholder="CNPJ" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                            </div>
+                         </div>
+                        <div>
+                            <label for="endereco" class="block text-sm font-medium text-gray-700">Endereço</label>
+                            <input type="text" id="endereco" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="space-y-4">
+                        <legend class="text-lg font-bold text-blue-800">Ficha de Qualificação - Representantes</legend>
+                        <div>
+                            <label for="regraRepresentacao" class="block text-sm font-medium text-gray-700">Regra de Representação</label>
+                            <input type="text" id="regraRepresentacao" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        </div>
+                        <div>
+                             <label class="block text-sm font-medium text-gray-700">Representantes Identificados (Selecione todos que assinam)</label>
+                             <div id="representante-checkboxes" class="mt-2 space-y-2 p-2 border rounded-md max-h-32 overflow-y-auto">
+                                  <p class="text-xs text-gray-500">Aguardando análise...</p>
+                             </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                             <input type="text" id="repNome" placeholder="Nome(s) Completo(s)" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <input type="text" id="repFuncao" placeholder="Função(ões)" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <input type="text" id="repRg" placeholder="RG(s) / Órgão(s) Exp." class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <input type="text" id="repCpf" placeholder="CPF(s)" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <textarea id="repEmail" rows="2" placeholder="E-mail(s) (um por linha, na ordem dos nomes)" class="sm:col-span-1 mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                             <textarea id="repTelefone" rows="2" placeholder="Telefone(s) (um por linha, na ordem dos nomes)" class="sm:col-span-1 mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="space-y-4">
+                        <legend class="text-lg font-bold text-blue-800">Ficha de Qualificação - Responsável</legend>
+                         <div class="flex items-center">
+                            <input id="resp-repetir" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="resp-repetir" class="ml-2 block text-sm text-gray-900">Repetir dados de um representante legal</label>
+                        </div>
+                        <div id="resp-rep-checkboxes-container" class="hidden mt-2">
+                             <label class="block text-sm font-medium text-gray-700">Selecione o(s) representante(s) para copiar os dados:</label>
+                             <div id="resp-rep-checkboxes" class="mt-2 space-y-2 p-2 border rounded-md max-h-32 overflow-y-auto"></div>
+                        </div>
+                        <div id="responsavel-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                             <input type="text" id="respNome" placeholder="Nome" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <input type="tel" id="respTelefone" placeholder="Telefone" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <input type="email" id="respEmail" placeholder="E-mail" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                             <input type="text" id="respCpf" placeholder="CPF" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="space-y-6">
+                        <legend class="text-lg font-bold text-blue-800">Ficha de Qualificação - Testemunhas</legend>
+                        <div class="p-4 border rounded-md">
+                            <h3 class="font-semibold text-md text-gray-800 mb-3">Testemunha (Contratante)</h3>
+                            <div class="flex items-center gap-2 mb-3">
+                                <select id="testemunha-select-contratante" class="block w-full border-gray-300 rounded-md shadow-sm"></select>
+                                <button id="delete-testemunha-btn-contratante" class="p-2.5 bg-gray-200 text-gray-600 rounded-md hover:bg-red-100 hover:text-red-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3-fill" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5Zm-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5ZM4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06Zm6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528ZM8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5Z"/></svg>
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="sm:col-span-2">
+                                    <input type="text" id="test1Nome" placeholder="Nome" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                </div>
+                                <input type="text" id="test1Cpf" placeholder="CPF" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                <input type="email" id="test1Email" placeholder="E-mail" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <button id="add-testemunha-btn-contratante" class="mt-3 text-sm bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-md hover:bg-gray-300">Salvar testemunha atual</button>
+                        </div>
+                         <div class="p-4 border rounded-md">
+                            <h3 class="font-semibold text-md text-gray-800 mb-3">Testemunha (Contratada)</h3>
+                             <div class="flex items-center gap-2 mb-3">
+                                <select id="testemunha-select" class="block w-full border-gray-300 rounded-md shadow-sm"></select>
+                                <button id="delete-testemunha-btn" class="p-2.5 bg-gray-200 text-gray-600 rounded-md hover:bg-red-100 hover:text-red-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3-fill" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5Zm-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5ZM4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06Zm6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528ZM8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5Z"/></svg>
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="sm:col-span-2">
+                                    <input type="text" id="test2Nome" placeholder="Nome" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                </div>
+                                <input type="text" id="test2Cpf" placeholder="CPF" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                                <input type="email" id="test2Email" placeholder="E-mail" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <button id="add-testemunha-btn" class="mt-3 text-sm bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-md hover:bg-gray-300">Salvar testemunha atual</button>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="space-y-4 border-t-4 border-blue-200 pt-6">
+                        <legend class="text-xl font-bold text-blue-800">3. Ficha de Contratação</legend>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-6">
+                            <div class="sm:col-span-1">
+                                <label for="tipoInstrumento" class="block text-sm font-medium text-gray-700">Tipo de Instrumento</label>
+                                <div class="flex mt-1 items-center">
+                                    <select id="tipoInstrumento" class="block w-full border-gray-300 rounded-l-md shadow-sm"></select>
+                                    <button id="deleteTipoInstrumento" class="p-2.5 bg-gray-200 text-gray-600 rounded-r-md hover:bg-red-100 hover:text-red-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3-fill" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5Zm-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5ZM4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06Zm6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528ZM8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5Z"/></svg>
+                                    </button>
+                                </div>
+                                <div class="flex mt-2 items-center">
+                                    <input type="text" id="newTipoInstrumento" placeholder="Adicionar novo tipo" class="block w-full border-gray-300 rounded-l-md shadow-sm px-2">
+                                    <button id="addTipoInstrumento" class="px-3 py-2 bg-gray-200 text-gray-700 rounded-r-md hover:bg-gray-300 text-sm whitespace-nowrap">Adicionar</button>
+                                </div>
+                            </div>
+                            <div class="sm:col-span-1">
+                                <label for="numeroInstrumento" class="block text-sm font-medium text-gray-700">Número do Instrumento</label>
+                                <input type="text" id="numeroInstrumento" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                            </div>
+                            <div class="sm:col-span-1">
+                                <label for="obra" class="block text-sm font-medium text-gray-700">Obra</label>
+                                <div class="flex mt-1 items-center">
+                                    <select id="obra" class="block w-full border-gray-300 rounded-l-md shadow-sm"></select>
+                                    <button id="deleteObra" class="p-2.5 bg-gray-200 text-gray-600 rounded-r-md hover:bg-red-100 hover:text-red-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3-fill" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5Zm-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5ZM4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06Zm6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528ZM8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5Z"/></svg>
+                                    </button>
+                                </div>
+                                <div class="flex mt-2 items-center">
+                                    <input type="text" id="newObra" placeholder="Adicionar nova obra" class="block w-full border-gray-300 rounded-l-md shadow-sm px-2">
+                                    <button id="addObra" class="px-3 py-2 bg-gray-200 text-gray-700 rounded-r-md hover:bg-gray-300 text-sm whitespace-nowrap">Adicionar</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                           <label for="nomeContratada" class="block text-sm font-medium text-gray-700">Nome da Contratada</label>
+                           <input type="text" id="nomeContratada" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        </div>
+                        
+                        <div>
+                            <label for="objetoContrato" class="block text-sm font-medium text-gray-700">Objeto</label>
+                            <textarea id="objetoContrato" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                        </div>
+                        <div>
+                            <label for="itensValores" class="block text-sm font-medium text-gray-700">Itens e Valores</label>
+                            <textarea id="itensValores" rows="4" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                        </div>
+                        <div>
+                            <label for="prazoExecucao" class="block text-sm font-medium text-gray-700">Prazo de Execução</label>
+                            <input type="text" id="prazoExecucao" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="relative flex items-start">
+                                <div class="flex h-6 items-center">
+                                    <input id="adiantamento-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600">
+                                </div>
+                                <div class="ml-3 text-sm leading-6">
+                                    <label for="adiantamento-checkbox" class="font-medium text-gray-900">Adiantamento</label>
+                                    <textarea id="adiantamento-comment" rows="2" placeholder="Comentários sobre o adiantamento..." class="hidden mt-2 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                                </div>
+                            </div>
+                             <div class="relative flex items-start">
+                                <div class="flex h-6 items-center">
+                                    <input id="faturamento-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600">
+                                </div>
+                                <div class="ml-3 text-sm leading-6">
+                                    <label for="faturamento-checkbox" class="font-medium text-gray-900">Faturamento Direto</label>
+                                    <textarea id="faturamento-comment" rows="2" placeholder="Comentários sobre o faturamento..." class="hidden mt-2 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                                </div>
+                            </div>
+                             <div class="relative flex items-start">
+                                <div class="flex h-6 items-center">
+                                    <input id="permuta-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600">
+                                </div>
+                                <div class="ml-3 text-sm leading-6">
+                                    <label for="permuta-checkbox" class="font-medium text-gray-900">Permuta</label>
+                                    <textarea id="permuta-comment" rows="2" placeholder="Comentários sobre a permuta..." class="hidden mt-2 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                         <div>
+                            <label for="obsContrato" class="block text-sm font-medium text-gray-700">Observações Gerais do Contrato</label>
+                            <textarea id="obsContrato" rows="4" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></textarea>
+                        </div>
+                    </fieldset>
+
+                    <fieldset class="space-y-4">
+                         <legend class="text-lg font-bold text-blue-800">4. Checklist de Documentação Contratual</legend>
+                         <ul id="checklist-container" class="space-y-3">
+                         </ul>
+                         <div class="flex items-center gap-2">
+                            <input type="text" id="new-checklist-item-name" placeholder="Nome do novo documento" class="block w-full border-gray-300 rounded-md shadow-sm text-sm p-2">
+                            <button id="add-checklist-item-btn" class="bg-blue-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-600 text-sm whitespace-nowrap">Adicionar Item</button>
+                         </div>
+                    </fieldset>
+                    
+                    <fieldset class="space-y-4">
+                         <legend class="text-lg font-bold text-blue-800">5. Finalizar</legend>
+                         <div class="flex flex-wrap gap-4">
+                            <button id="generate-pdf-btn" class="flex-1 bg-green-600 text-white font-bold py-3 px-6 rounded-md hover:bg-green-700 disabled:bg-gray-400 min-w-[180px]">Gerar PDF</button>
+                             <button id="generate-excel-btn" class="flex-1 bg-teal-600 text-white font-bold py-3 px-6 rounded-md hover:bg-teal-700 disabled:bg-gray-400 min-w-[180px]">Baixar Ficha (Excel)</button>
+                            <button id="download-zip-btn" class="flex-1 bg-gray-600 text-white font-bold py-3 px-6 rounded-md hover:bg-gray-700 disabled:bg-gray-400 min-w-[180px]">Baixar Anexos (.zip)</button>
+                             <button id="send-email-btn" class="flex-1 bg-orange-500 text-white font-bold py-3 px-6 rounded-md hover:bg-orange-600 disabled:bg-gray-400 min-w-[180px]">Enviar por E-mail</button>
+                         </div>
+                    </fieldset>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="email-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+        <div class="relative mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Enviar E-mail</h3>
+                <div class="mt-2 px-7 py-3 space-y-4 text-left">
+                    <div>
+                        <label for="email-to" class="block text-sm font-medium text-gray-700">Para:</label>
+                        <textarea id="email-to" rows="2" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="email1@exemplo.com, email2@exemplo.com"></textarea>
+                    </div>
+                    <div>
+                        <label for="email-cc" class="block text-sm font-medium text-gray-700">CC:</label>
+                        <textarea id="email-cc" rows="2" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="copia1@exemplo.com"></textarea>
+                    </div>
+                    <p class="text-sm text-gray-500 text-center">
+                        Clique no link abaixo para abrir seu programa de e-mail.
+                    </p>
+                    <a id="email-link" href="#" target="_blank" class="block text-center w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-700" data-disabled="true">Abrir E-mail</a>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-email-modal" class="px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./renderer.js" defer></script>
+</body>
+</html>
+

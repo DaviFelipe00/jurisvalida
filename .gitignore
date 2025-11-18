@@ -1,0 +1,8 @@
+node_modules
+# Ignorar builds
+dist/
+build/
+*.exe
+*.zip
+*.dmg
+*.AppImage

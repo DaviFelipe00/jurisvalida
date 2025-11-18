@@ -1,0 +1,50 @@
+{
+  "name": "jurivalida",
+  "version": "1.0.0",
+  "description": "JuriValida - Assistente para preenchimento e validação jurídica.",
+  "main": "src/main/main.js",
+  "author": "JuriValida",
+  "license": "ISC",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:css": "tailwindcss -i ./src/input.css -o ./src/output.css",
+    "watch:css": "tailwindcss -i ./src/input.css -o ./src/output.css --watch",
+    "dev": "npm start",
+    "start": "npm run build:css && electron .",
+    "build": "npm run clean && npm run build:css && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^38.3.0",
+    "electron-builder": "^24.13.3",
+    "electron-reload": "^2.0.0-alpha.1",
+    "rimraf": "^5.0.10",
+    "tailwindcss": "^3.4.3"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  },
+  "build": {
+    "appId": "com.jurivalida.app",
+    "productName": "JuriValida",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/img/jurivalida.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "JuriValida"
+    }
+  }
+}
