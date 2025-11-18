@@ -7,9 +7,8 @@
   "license": "ISC",
   "scripts": {
     "clean": "rimraf dist",
-    "build:css": "tailwindcss -i ./src/input.css -o ./src/output.css",
-    "watch:css": "tailwindcss -i ./src/input.css -o ./src/output.css --watch",
-    "dev": "npm start",
+    "build:css": "tailwindcss -i ./src/style/input.css -o ./src/style/output.css",
+    "watch:css": "tailwindcss -i ./src/style/input.css -o ./src/style/output.css --watch",
     "start": "npm run build:css && electron .",
     "build": "npm run clean && npm run build:css && electron-builder"
   },
@@ -33,24 +32,11 @@
       "src/**/*",
       "assets/**/*",
       "package.json",
-      
-      "src/main/main.js",
-      "src/main/preload.js",
-      "src/main/loginPreload.js",
-      
-      "src/renderer/renderer.js",
-      "src/renderer/loginRenderer.js",
-      
-      "src/services/authService.js",
-      
-      "src/views/index.html",
-      "src/views/login.html",
-
       "tailwind.config.js"
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/img/jurivalida.png"
+      "icon": "assets/img/Jurivalida.png"
     },
     "nsis": {
       "oneClick": false,

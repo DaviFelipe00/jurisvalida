@@ -102,9 +102,9 @@ const createMainWindow = () => {
         }
     });
 
-    // CAMINHO CORRIGIDO: Sobe para src (..), entra em renderer/windowns
-    // Nota: Mantive 'windowns' conforme sua imagem
-    mainWindow.loadFile(path.join(__dirname, '../renderer/windowns/index.html'));
+    // CAMINHO CORRIGIDO: Sobe para src (..), entra em renderer/windows
+    // IMPORTANTE: Certifique-se de renomear a pasta 'windowns' para 'windows'
+    mainWindow.loadFile(path.join(__dirname, '../renderer/windows/index.html'));
 
     blockDevTools(mainWindow);
 
