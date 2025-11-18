@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Login | Rio Ave</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <link href="../output.css" rel="stylesheet">
+
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
@@ -16,15 +18,14 @@
       background: linear-gradient(135deg, #1d467c 0%, #153966 50%, #0f2c4d 100%);
     }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.75); /* branco com leve transparência */
-  backdrop-filter: blur(80px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 1rem; /* opcional: bordas arredondadas */
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); /* leve sombra pra destaque */
-}
-
+    .glass-card {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(80px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 1rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    }
 
     .input-field {
       transition: all 0.3s ease;
@@ -55,34 +56,13 @@
     }
 
     @keyframes fadeInDown {
-      from {
-        opacity: 0;
-        transform: translateY(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @keyframes float {
-      0%, 100% {
-        transform: translateY(0);
-      }
-      50% {
-        transform: translateY(-5px);
-      }
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
@@ -93,7 +73,7 @@
     
     <div class="logo-container flex flex-col items-center mb-10">
       <img
-        src="./assets/img/rioave-logo.png"
+        src="../../assets/img/rioave-logo.png"
         alt="Logo Rio Ave"
         class="logo-img w-28 h-auto mb-5 drop-shadow-lg"
       />
@@ -119,55 +99,33 @@
       <div>
         <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">Senha</label>
         <div class="relative">
-  <input
-    type="password"
-    id="password"
-    class="input-field block w-full rounded-xl border-2 border-slate-200 focus:ring-0 focus:border-blue-500 text-slate-900 px-4 py-3.5 text-sm pr-11"
-    placeholder="Digite sua senha"
-    required
-  />
+          <input
+            type="password"
+            id="password"
+            class="input-field block w-full rounded-xl border-2 border-slate-200 focus:ring-0 focus:border-blue-500 text-slate-900 px-4 py-3.5 text-sm pr-11"
+            placeholder="Digite sua senha"
+            required
+          />
 
-  <button
-    type="button"
-    id="toggle-password-btn"
-    class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500 hover:text-blue-600 transition-all duration-200 ease-in-out"
-    aria-label="Mostrar ou ocultar senha"
-  >
-    <!-- Ícone de olho -->
-    <svg
-      id="eye-icon"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="w-5 h-5 transition-transform duration-200 ease-in-out hover:scale-110"
-    >
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-
-    <!-- Ícone de olho cortado -->
-    <svg
-      id="eye-slash-icon"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="w-5 h-5 hidden transition-transform duration-200 ease-in-out hover:scale-110"
-    >
-      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C5 20 1 12 1 12a21.15 21.15 0 0 1 4.23-5.64" />
-      <path d="M22.94 12a21.12 21.12 0 0 0-4.23-5.64" />
-      <path d="M9.53 9.53a3 3 0 0 0 4.24 4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  </button>
-</div>
+          <button
+            type="button"
+            id="toggle-password-btn"
+            class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-500 hover:text-blue-600 transition-all duration-200 ease-in-out"
+            aria-label="Mostrar ou ocultar senha"
+          >
+            <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 transition-transform duration-200 ease-in-out hover:scale-110">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <svg id="eye-slash-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 hidden transition-transform duration-200 ease-in-out hover:scale-110">
+              <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C5 20 1 12 1 12a21.15 21.15 0 0 1 4.23-5.64" />
+              <path d="M22.94 12a21.12 21.12 0 0 0-4.23-5.64" />
+              <path d="M9.53 9.53a3 3 0 0 0 4.24 4.24" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <button
         id="login-btn"
@@ -184,21 +142,14 @@
   </div>
 
   <script>
-    // Pega os elementos do DOM
     const toggleBtn = document.getElementById('toggle-password-btn');
     const passwordInput = document.getElementById('password');
     const eyeIcon = document.getElementById('eye-icon');
     const eyeSlashIcon = document.getElementById('eye-slash-icon');
 
-    // Adiciona o evento de clique no botão de toggle
     toggleBtn.addEventListener('click', () => {
-      // Verifica o tipo atual do input
       const isPassword = passwordInput.type === 'password';
-      
-      // Alterna o tipo do input
       passwordInput.type = isPassword ? 'text' : 'password';
-      
-      // Alterna qual ícone está visível (usando a classe 'hidden' do Tailwind)
       eyeIcon.classList.toggle('hidden');
       eyeSlashIcon.classList.toggle('hidden');
     });
