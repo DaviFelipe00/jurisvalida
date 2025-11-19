@@ -1,10 +1,10 @@
 // --- STATE MANAGEMENT ---
 const state = {
     files: {
-        proposta: null, // Armazena o objeto File completo
-        contrato: null, // Armazena o objeto File completo
+        proposta: null, // Stores the File object
+        contrato: null, // Stores the File object
     },
-    checklist: {}, // Agora armazena o objeto File completo
+    checklist: {}, // Stores File objects by ID
     checklistItems: [],
     representantes: [],
     selectedRepresentantes: [],
@@ -14,6 +14,9 @@ const state = {
     testemunhasContratante: [],
     itensValoresStructured: [],
 };
+
+// --- GLOBAL VARIABLES ---
+let apiPort = 3000; // Default port, updated by Main process
 
 // --- UI ELEMENTS ---
 const ui = {
@@ -114,6 +117,14 @@ function initializeApp() {
     renderChecklist();
     loadDataFromLocalFile();
     setupEventListeners();
+    
+    // Listen for the API port from the Main process
+    if (window.electronAPI && window.electronAPI.onSetApiPort) {
+        window.electronAPI.onSetApiPort((port) => {
+            console.log(`[Renderer] Porta da API definida para: ${port}`);
+            apiPort = port;
+        });
+    }
 }
 
 function renderChecklist() {
@@ -153,7 +164,7 @@ function handleAddChecklistItem() {
     }
 }
 
-async function handleChecklistEvent(e) {
+function handleChecklistEvent(e) {
     const target = e.target;
     if (target.matches('input[type="file"]')) {
         const id = target.dataset.id;
@@ -161,11 +172,7 @@ async function handleChecklistEvent(e) {
         if (file) {
             state.checklist[id] = file;
             renderChecklist(); 
-
-            const checklistItem = state.checklistItems.find(item => String(item.id) === id);
-            if (checklistItem && checklistItem.text.toUpperCase().includes('CARTÃO DE CNPJ')) {
-                await updateDataFromCnpjCard(file);
-            }
+            // Note: Instant CNPJ analysis removed to favor centralized server analysis
         }
     }
     if (target.closest('button.trash-icon')) {
@@ -180,6 +187,8 @@ async function handleChecklistEvent(e) {
 function setupEventListeners() {
     setupUploadArea('proposta');
     setupUploadArea('contrato');
+    
+    // Main analysis action
     ui.analyzeBtn.addEventListener('click', handleAnalysis);
    
     ui.representanteCheckboxes.addEventListener('change', updateRepresentanteFields);
@@ -369,194 +378,70 @@ function handleFileSelect(file, type) {
     }
 }
 
+// --- CORE ANALYSIS LOGIC (UPDATED FOR BACKEND) ---
+
 async function handleAnalysis() {
     setLoading(true);
     showError(null);
+    ui.analysisStatus.textContent = 'Enviando arquivos para o servidor...';
+
     try {
-        const propostaText = await extractTextFromFile(state.files.proposta);
-        const contratoText = await extractTextFromFile(state.files.contrato);
-        let cartaoCnpjText = null;
-        
+        const apiKey = ui.apiKeyInput.value.trim();
+        if (!apiKey) {
+            throw new Error("Chave da API não encontrada. Por favor, insira sua chave da API do Google AI Studio nas Configurações e salve.");
+        }
+
+        // Prepare form data to send files to the backend
+        const formData = new FormData();
+        formData.append('apiKey', apiKey);
+        formData.append('proposta', state.files.proposta);
+        formData.append('contrato', state.files.contrato);
+
+        // Check for CNPJ Card in checklist items
         const cartaoCnpjItem = state.checklistItems.find(item => item.text.toUpperCase().includes('CARTÃO DE CNPJ'));
         if (cartaoCnpjItem) {
             const cartaoCnpjFile = state.checklist[String(cartaoCnpjItem.id)];
             if (cartaoCnpjFile) {
-                 cartaoCnpjText = await extractTextFromFile(cartaoCnpjFile);
+                 console.log("Incluindo Cartão CNPJ na análise.");
+                 formData.append('cnpj', cartaoCnpjFile);
             }
         }
 
-        ui.debugProposta.value = propostaText || "Não foi possível extrair texto.";
-        ui.debugContrato.value = contratoText || "Não foi possível extrair texto.";
-        ui.debugCnpj.value = cartaoCnpjText || "Nenhum Cartão CNPJ foi anexado ou encontrado no checklist.";
+        console.log(`Enviando requisição para http://localhost:${apiPort}/api/analyze`);
+        
+        // Call the Local Express Server
+        const response = await fetch(`http://localhost:${apiPort}/api/analyze`, {
+            method: 'POST',
+            body: formData
+        });
 
-        if (!propostaText || !contratoText) {
-            throw new Error("Não foi possível extrair texto de um dos documentos obrigatórios (Proposta ou Contrato Social).");
+        if (!response.ok) {
+            let errorMsg = `Erro ${response.status}`;
+            try {
+                const errData = await response.json();
+                errorMsg = errData.error || errorMsg;
+            } catch(e) {}
+            throw new Error(`Falha no servidor: ${errorMsg}`);
         }
 
-        await callGeminiAPI(propostaText, contratoText, cartaoCnpjText);
+        const data = await response.json();
+        console.log("Resposta da análise recebida:", data);
+
+        // Populate form with data received from backend
+        populateForm(data);
+        
+        ui.debugProposta.value = "Texto processado no servidor (Backend).";
+        ui.debugContrato.value = "Texto processado no servidor (Backend).";
+        ui.debugCnpj.value = "Texto processado no servidor (Backend).";
+
+        ui.analysisStatus.textContent = 'Análise concluída com sucesso!';
 
     } catch (error) {
         console.error("Erro na Análise:", error);
         showError(error.message);
+        ui.analysisStatus.textContent = 'Erro na análise.';
     } finally {
         setLoading(false);
-    }
-}
-
-async function updateDataFromCnpjCard(file) {
-    ui.analysisStatus.textContent = 'Lendo Cartão CNPJ...';
-    try {
-        const cartaoCnpjText = await extractTextFromFile(file);
-        ui.debugCnpj.value = cartaoCnpjText || "Não foi possível ler o texto do anexo.";
-        if (!cartaoCnpjText) {
-            throw new Error("Não foi possível ler o texto do Cartão CNPJ.");
-        }
-
-        const systemPrompt = `Você é um assistente especialista em extrair dados de documentos. Extraia a razão social, o CNPJ e o endereço completo do texto de um Cartão CNPJ. Retorne um JSON. Se um campo não for encontrado, retorne uma string vazia.`;
-        const schema = {
-            type: "OBJECT",
-            properties: {
-                razaoSocial: { type: "STRING" },
-                cnpj: { type: "STRING" },
-                endereco: { type: "STRING" },
-            }
-        };
-
-        const result = await callGeminiAPIWithRetry(callGeminiAPIForSpecificExtraction, [cartaoCnpjText, systemPrompt, schema]);
-
-
-        if (result) {
-            if(result.razaoSocial) formFields.razaoSocial.value = result.razaoSocial;
-            if(result.cnpj) formFields.cnpj.value = result.cnpj;
-            if(result.endereco) formFields.endereco.value = result.endereco;
-        } else {
-             throw new Error("Não foi possível extrair dados do Cartão CNPJ via API após múltiplas tentativas.");
-        }
-    } catch (error) {
-        console.error("Erro ao atualizar dados do CNPJ:", error);
-        showError(`Falha ao ler o Cartão CNPJ: ${error.message}`);
-    } finally {
-        ui.analysisStatus.textContent = '';
-    }
-}
-
-// Helper function for exponential backoff delay
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function callGeminiAPIWithRetry(apiCallFunction, args, maxRetries = 3) {
-    let attempts = 0;
-    while (attempts < maxRetries) {
-        try {
-            return await apiCallFunction(...args);
-        } catch (error) {
-            attempts++;
-            // Check if the error is a 503 or a network error suggesting temporary unavailability
-            if (error.message.includes('API Error: 503') || error instanceof TypeError /* Network errors often manifest as TypeErrors in fetch */) {
-                if (attempts >= maxRetries) {
-                    throw new Error(`A API do Google parece estar temporariamente indisponível (${error.message}). Tente novamente mais tarde.`);
-                }
-                const delayTime = Math.pow(2, attempts) * 1000; // 1s, 2s, 4s
-                console.log(`Tentativa ${attempts} falhou com erro 503/network. Tentando novamente em ${delayTime / 1000}s...`);
-                await delay(delayTime);
-            } else {
-                // If it's another type of error (like 403), rethrow immediately
-                throw error;
-            }
-        }
-    }
-}
-
-
-async function callGeminiAPIForSpecificExtraction(text, systemPrompt, schema){
-    const apiKey = ui.apiKeyInput.value.trim();
-    if (!apiKey) {
-        throw new Error("Chave da API não encontrada. Por favor, insira sua chave da API do Google AI Studio nas Configurações e salve.");
-    }
-    const userPrompt = `Extraia as informações do seguinte texto: """${text}"""`;
-    const payload = { contents: [{ parts: [{ text: userPrompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema }, systemInstruction: { parts: [{ text: systemPrompt }] } };
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!response.ok) {
-        // Lança o erro para a função callGeminiAPIWithRetry tratar
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-    const result = await response.json();
-    const candidate = result.candidates?.[0];
-
-    if (candidate && candidate.content?.parts?.[0]?.text) {
-        return JSON.parse(candidate.content.parts[0].text);
-    }
-    throw new Error("A resposta da API está vazia ou em formato inválido."); // Garante que um erro seja lançado se a resposta não for válida
-}
-
-async function callGeminiAPI(propostaText, contratoText, cartaoCnpjText) {
-    const apiKey = ui.apiKeyInput.value.trim();
-    if (!apiKey) {
-        throw new Error("Chave da API não encontrada. Por favor, insira sua chave da API do Google AI Studio nas Configurações e salve.");
-    }
-
-    const schema = {
-        type: "OBJECT", properties: {
-            servico: { type: "STRING" },
-            razaoSocial: { type: "STRING" },
-            cnpj: { type: "STRING" },
-            endereco: { type: "STRING" },
-            regraRepresentacao: { type: "STRING" },
-            representantes: { type: "ARRAY", items: { type: "OBJECT", properties: { nome: { type: "STRING" }, funcao: { type: "STRING" }, rgComOrgaoExpedidor: { type: "STRING" }, cpf: { type: "STRING" } } } },
-            objetoContrato: { type: "STRING" },
-            itensValores: { type: "STRING" },
-            itensValoresStructured: { type: "ARRAY", items: { type: "OBJECT", properties: { item: { type: "STRING" }, servico: { type: "STRING" }, total: { type: "STRING" } } } },
-            prazoExecucao: { type: "STRING" },
-            observacoesContrato: { type: "STRING" },
-        }
-    };
-    const systemPrompt = `Você é um assistente jurídico especialista. Sua tarefa é extrair informações de múltiplos textos e retornar um JSON estruturado. Siga as regras à risca.`;
-    
-    // CORREÇÃO: Instrução mais específica para representantes
-    let userPrompt = `
-        Por favor, analise os textos a seguir para preencher um formulário de qualificação e contratação.
-
-        **Regras CRÍTICAS de Prioridade:**
-        - Se o TEXTO_CARTAO_CNPJ for fornecido, ele é a fonte MÁXIMA de verdade. Extraia a 'razaoSocial', o 'cnpj' e o 'endereco' OBRIGATORIAMENTE e EXCLUSIVAMENTE do TEXTO_CARTAO_CNPJ. Ignore o TEXTO_CONTRATO_SOCIAL para estes três campos.
-        - Se o TEXTO_CARTAO_CNPJ NÃO for fornecido, então extraia a 'razaoSocial', 'cnpj' e 'endereco' do TEXTO_CONTRATO_SOCIAL.
-
-        **Outras Regras:**
-        - Do TEXTO_PROPOSTA, extraia o 'servico'.
-        - Do TEXTO_CONTRATO_SOCIAL, extraia a 'regraRepresentacao'.
-        - Do TEXTO_CONTRATO_SOCIAL, localize a cláusula de administração (ou seção equivalente que define quem administra a sociedade) e extraia a lista de 'representantes' (sócios-administradores ou procuradores com poderes de administração) mencionados NESSA CLÁUSULA. Para cada representante, extraia nome, função, RG com órgão expedidor e CPF.
-        - Do TEXTO_PROPOSTA, extraia o 'objetoContrato', 'itensValores', 'itensValoresStructured', 'prazoExecucao' e 'observacoesContrato'.
-        
-        **Regra Final:** Se qualquer informação não for encontrada, retorne uma string vazia (""), NUNCA a string literal 'null'.
-
-        TEXTO_PROPOSTA: """${propostaText}"""
-        TEXTO_CONTRATO_SOCIAL: """${contratoText}"""
-    `;
-
-    if(cartaoCnpjText) {
-        userPrompt += `\nTEXTO_CARTAO_CNPJ: """${cartaoCnpjText}"""`;
-    }
-
-    const payload = { contents: [{ parts: [{ text: userPrompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema }, systemInstruction: { parts: [{ text: systemPrompt }] } };
-    
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-    // Usa a função com retentativa
-    const result = await callGeminiAPIWithRetry(async () => {
-        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
-        return await response.json();
-    }, []);
-
-    const candidate = result.candidates?.[0];
-
-    if (candidate && candidate.content?.parts?.[0]?.text) {
-        const parsedJson = JSON.parse(candidate.content.parts[0].text);
-        populateForm(parsedJson);
-    } else {
-        throw new Error("A resposta da API está vazia ou em formato inválido após múltiplas tentativas.");
     }
 }
 
@@ -897,7 +782,6 @@ async function generateExcel() {
 
         XLSX.utils.book_append_sheet(wb, ws, 'Ficha de Contratacao');
         
-        // CORREÇÃO: Gerar como 'buffer' (Node.js Buffer) compatível com fs.writeFile via IPC
         const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); 
         const filePath = await window.electronAPI.saveFile({
             title: "Salvar Ficha Excel",
@@ -907,7 +791,6 @@ async function generateExcel() {
         });
 
         if (filePath) {
-            // Envia o Uint8Array para o processo principal
             await window.electronAPI.saveBuffer(filePath, new Uint8Array(buffer)); 
         }
     } catch (error) {
@@ -938,7 +821,7 @@ async function downloadAttachmentsAsZip() {
             }
         }
 
-        const zipContent = await zip.generateAsync({ type: 'uint8array' }); // Gera como Uint8Array
+        const zipContent = await zip.generateAsync({ type: 'uint8array' }); 
         
         const filePath = await window.electronAPI.saveFile({
             title: "Salvar Anexos .zip",
@@ -1010,7 +893,7 @@ function setLoading(isLoading) {
     [ui.generatePdfBtn, ui.generateExcelBtn, ui.downloadZipBtn, ui.sendEmailBtn].forEach(btn => btn.disabled = isLoading);
     ui.analyzeSpinner.classList.toggle('hidden', !isLoading);
     ui.analyzeBtnText.classList.toggle('hidden', isLoading);
-    ui.analysisStatus.textContent = isLoading ? 'Analisando...' : '';
+    ui.analysisStatus.textContent = isLoading ? 'Processando...' : '';
 }
 
 function showError(message) {
@@ -1021,86 +904,6 @@ function showError(message) {
         ui.errorBanner.classList.add('hidden');
     }
 }
-
-async function extractTextFromFile(file) {
-    // A função agora espera receber um objeto File padrão
-    if (!(file instanceof File)) {
-        console.error('[extractTextFromFile] Tentativa de extrair texto, mas o parâmetro não é um objeto File.', file);
-        return null;
-    }
-    
-    try {
-        console.log(`[extractTextFromFile] Iniciando leitura do arquivo na interface: ${file.name}`);
-        const arrayBuffer = await file.arrayBuffer(); // Lê o conteúdo do File diretamente
-        
-        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-            throw new Error("A leitura do arquivo resultou em um buffer vazio.");
-        }
-        console.log(`[extractTextFromFile] Arquivo lido com sucesso, ${arrayBuffer.byteLength} bytes.`);
-        
-        const uint8array = new Uint8Array(arrayBuffer);
-        const extension = file.name.split('.').pop().toLowerCase();
-        
-        if (extension === 'txt') {
-            const decoder = new TextDecoder('utf-8');
-            return decoder.decode(arrayBuffer);
-        } else if (extension === 'docx') {
-            console.log("[extractTextFromFile] Processando como DOCX...");
-            const result = await mammoth.extractRawText({ arrayBuffer });
-            console.log("[extractTextFromFile] DOCX processado.");
-            return result.value;
-        } else if (extension === 'pdf') {
-            console.log("[extractTextFromFile] Processando como PDF...");
-            const pdf = await pdfjsLib.getDocument(uint8array).promise;
-            console.log(`[extractTextFromFile] PDF carregado: ${pdf.numPages} páginas.`);
-            let text = '';
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
-                text += content.items.map(item => item.str).join(' ') + '\n';
-            }
-
-            if (text.trim().length < 150) { 
-                console.log("[extractTextFromFile] PDF parece ser uma imagem, iniciando OCR...");
-                ui.analysisStatus.textContent = 'PDF de imagem detectado, iniciando OCR...';
-                const worker = await Tesseract.createWorker('por', 1, { 
-                    logger: m => { 
-                        console.log('[Tesseract]', m); 
-                        if (m.status === 'recognizing text') { 
-                            ui.analysisStatus.textContent = `Analisando página... ${Math.round(m.progress * 100)}%`; 
-                        } 
-                    } 
-                });
-                let ocrText = '';
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 2.0 });
-                    const canvas = document.createElement('canvas');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-                    console.log(`[extractTextFromFile] Renderizada página ${i} para OCR.`);
-                    const { data } = await worker.recognize(canvas.toDataURL('image/png'));
-                    console.log(`[extractTextFromFile] OCR da página ${i} concluído.`);
-                    ocrText += data.text + '\n';
-                }
-                await worker.terminate();
-                console.log("[extractTextFromFile] OCR finalizado.");
-                return ocrText;
-            } else {
-                console.log("[extractTextFromFile] Extração de texto padrão do PDF concluída.");
-                return text;
-            }
-        } else {
-            throw new Error("Formato de arquivo não suportado.");
-        }
-    } catch (err) {
-        console.error(`[extractTextFromFile] Falha CRÍTICA ao extrair texto de ${file.name}:`, err);
-        showError(`Falha ao extrair texto de ${file.name}: ${err.message}`);
-        return null;
-    }
-}
-
 
 async function saveApiKey() {
     const apiKey = ui.apiKeyInput.value.trim();
@@ -1117,6 +920,4 @@ async function saveApiKey() {
 }
 
 // --- SCRIPT EXECUTION ---
-window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 initializeApp();
-

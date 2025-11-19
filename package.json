@@ -20,23 +20,36 @@
     "tailwindcss": "^3.4.3"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3"
+    "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mammoth": "^1.11.0",
+    "multer": "^2.0.2",
+    "pdf-parse": "^2.4.5",
+    "portfinder": "^1.0.38",
+    "tesseract.js": "^6.0.1"
   },
   "build": {
     "appId": "com.jurivalida.app",
     "productName": "JuriValida",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "src/assets/img"
     },
     "files": [
       "src/**/*",
-      "assets/**/*",
       "package.json",
       "tailwind.config.js"
     ],
+    "asarUnpack": [
+      "src/server/**/*",
+      "node_modules/pdf-parse/**/*",
+      "node_modules/tesseract.js/**/*"
+    ],
     "win": {
       "target": "nsis",
-      "icon": "assets/img/Jurivalida_mini_logo.png"
+      "icon": "src/assets/img/juvivalida_mini_logo.png"
     },
     "nsis": {
       "oneClick": false,
@@ -44,7 +57,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "JuriValida"
+      "shortcutName": "JuriValida",
+      "installerIcon": "src/assets/img/juvivalida_mini_logo.png",
+      "uninstallerIcon": "src/assets/img/juvivalida_mini_logo.png",
+      "installerHeaderIcon": "src/assets/img/juvivalida_mini_logo.png"
     }
   }
 }

@@ -1,27 +1,33 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const portfinder = require('portfinder'); // Import portfinder
 
 // --- IMPORT AUTH SERVICE ---
-// Como está na mesma pasta (src/main), usamos ./
 const { registerAuthHandlers } = require('./authService');
 
-// --- VARIÁVEIS GLOBAIS ---
+// --- IMPORT LOCAL SERVER ---
+// Assumes you created src/server/app.js as discussed
+const createServer = require('../server/app'); 
+
+// --- GLOBAL VARIABLES ---
 let loginWindow;
 let mainWindow;
+let serverInstance; // To store the Express server instance
+let apiPort = 3000; // Default port, will be updated by portfinder
 
-// --- DEFINIÇÃO DE CAMINHOS ---
+// --- PATH DEFINITIONS ---
 const userDataPath = app.getPath('userData');
 const dbFolderPath = path.join(userDataPath, 'database');
 const attachmentsFolderPath = path.join(userDataPath, 'attachments');
 const settingsFilePath = path.join(dbFolderPath, 'settings.json');
 
-// --- DETECTA AMBIENTE DE DESENVOLVIMENTO ---
+// --- DETECT DEVELOPMENT ENVIRONMENT ---
 function isDevelopment() {
     return process.env.NODE_ENV === 'development' || !app.isPackaged;
 }
 
-// --- BLOQUEIA DEVTOOLS ---
+// --- BLOCK DEVTOOLS ---
 function blockDevTools(window) {
     if (!isDevelopment()) {
         window.setMenu(null);
@@ -45,13 +51,29 @@ async function ensureDataFoldersExist() {
     try {
         await fs.mkdir(dbFolderPath, { recursive: true });
         await fs.mkdir(attachmentsFolderPath, { recursive: true });
-        console.log('Pastas de dados verificadas em:', userDataPath);
+        console.log('Data folders verified at:', userDataPath);
     } catch (error) {
-        console.error('Erro ao criar pastas:', error);
+        console.error('Error creating folders:', error);
     }
 }
 
-// --- JANELA DE LOGIN ---
+// --- START EXPRESS SERVER ---
+async function startExpressServer() {
+    try {
+        // Find a free port starting from 3000
+        const port = await portfinder.getPortPromise({ port: 3000 });
+        const expressApp = createServer();
+        
+        serverInstance = expressApp.listen(port, () => {
+            console.log(`Express Server running locally on port ${port}`);
+            apiPort = port; // Store the port to send to Frontend later
+        });
+    } catch (err) {
+        console.error("Critical Error starting Express Server:", err);
+    }
+}
+
+// --- LOGIN WINDOW ---
 const createLoginWindow = () => {
     loginWindow = new BrowserWindow({
         width: 1100,
@@ -64,7 +86,6 @@ const createLoginWindow = () => {
         autoHideMenuBar: true,
         backgroundColor: '#0a3c74',
         webPreferences: {
-            // CAMINHO CORRIGIDO: Sobe para src (..), entra em preload
             preload: path.join(__dirname, '../preload/loginPreload.js'),
             contextIsolation: true,
             nodeIntegration: false,
@@ -72,7 +93,6 @@ const createLoginWindow = () => {
         },
     });
 
-    // CAMINHO CORRIGIDO: Sobe para src (..), entra em login
     loginWindow.loadFile(path.join(__dirname, '../login/login.html'));
 
     blockDevTools(loginWindow);
@@ -86,7 +106,7 @@ const createLoginWindow = () => {
     });
 };
 
-// --- JANELA PRINCIPAL ---
+// --- MAIN WINDOW ---
 const createMainWindow = () => {
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -94,7 +114,6 @@ const createMainWindow = () => {
         show: false,
         autoHideMenuBar: true, 
         webPreferences: {
-            // CAMINHO CORRIGIDO: Sobe para src (..), entra em preload
             preload: path.join(__dirname, '../preload/preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
@@ -102,9 +121,15 @@ const createMainWindow = () => {
         }
     });
 
-    // CAMINHO CORRIGIDO: Sobe para src (..), entra em renderer/windows
-    // IMPORTANTE: Certifique-se de renomear a pasta 'windowns' para 'windows'
-    mainWindow.loadFile(path.join(__dirname, '../renderer/windows/index.html'));
+    // Load the HTML
+    mainWindow.loadFile(path.join(__dirname, '../renderer/windows/index.html'))
+        .then(() => {
+            // Once loaded, send the API Port to the renderer
+            if (mainWindow) {
+                console.log(`Sending API Port ${apiPort} to Main Window`);
+                mainWindow.webContents.send('set-api-port', apiPort);
+            }
+        });
 
     blockDevTools(mainWindow);
 
@@ -120,11 +145,14 @@ const createMainWindow = () => {
 app.whenReady().then(async () => {
     await ensureDataFoldersExist();
 
+    // Initialize local server before creating windows
+    await startExpressServer();
+
     if (!isDevelopment()) {
         Menu.setApplicationMenu(null);
     }
 
-    // --- HANDLERS DE DADOS (IPC) ---
+    // --- DATA HANDLERS (IPC) ---
     
     ipcMain.handle('load-data', async () => {
         try {
@@ -142,13 +170,13 @@ app.whenReady().then(async () => {
                 const fileContent = await fs.readFile(settingsFilePath, 'utf-8');
                 currentData = JSON.parse(fileContent);
             } catch (error) {
-                // Arquivo não existe, normal.
+                // File doesn't exist, normal
             }
             const newData = { ...currentData, ...dataToSave };
             await fs.writeFile(settingsFilePath, JSON.stringify(newData, null, 2));
             return { success: true };
         } catch (error) {
-            console.error('Erro ao salvar dados:', error);
+            console.error('Error saving data:', error);
             return { success: false, error: error.message };
         }
     });
@@ -160,7 +188,7 @@ app.whenReady().then(async () => {
             await fs.writeFile(filePath, buffer);
             return { success: true, path: filePath, name: name }; 
         } catch (error) {
-            console.error('Erro ao salvar anexo:', error);
+            console.error('Error saving attachment:', error);
             return { success: false, error: error.message };
         }
     });
@@ -170,7 +198,7 @@ app.whenReady().then(async () => {
             const buffer = await fs.readFile(filePath);
             return new Uint8Array(buffer);
         } catch (error) {
-            console.error(`Erro ao ler arquivo: ${filePath}`, error);
+            console.error(`Error reading file: ${filePath}`, error);
             return null;
         }
     });
@@ -185,7 +213,7 @@ app.whenReady().then(async () => {
             await fs.writeFile(filePath, buffer);
             return { success: true };
         } catch (error) {
-            console.error('Erro ao salvar buffer:', error);
+            console.error('Error saving buffer:', error);
             return { success: false, error: error.message };
         }
     });
@@ -194,14 +222,14 @@ app.whenReady().then(async () => {
         shell.openPath(userDataPath);
     });
 
-    // --- REGISTRA HANDLERS DE LOGIN ---
+    // --- REGISTER LOGIN HANDLERS ---
     registerAuthHandlers({
         ipcMain,
         getLoginWindow: () => loginWindow,
         createMainWindow: createMainWindow
     });
 
-    // --- INICIALIZAÇÃO ---
+    // --- INITIALIZATION ---
     createLoginWindow();
 
     app.on('activate', () => {
@@ -211,7 +239,12 @@ app.whenReady().then(async () => {
     });
 });
 
+// Quit when all windows are closed, except on macOS
 app.on('window-all-closed', () => {
+    // Close Express server cleanly
+    if (serverInstance) {
+        serverInstance.close();
+    }
     if (process.platform !== 'darwin') {
         app.quit();
     }
