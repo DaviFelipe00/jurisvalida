@@ -1,10 +1,10 @@
 // --- STATE MANAGEMENT ---
 const state = {
     files: {
-        proposta: null, // Stores the File object
-        contrato: null, // Stores the File object
+        proposta: null,
+        contrato: null,
     },
-    checklist: {}, // Stores File objects by ID
+    checklist: {}, // Armazena objetos File pelo ID
     checklistItems: [],
     representantes: [],
     selectedRepresentantes: [],
@@ -16,7 +16,7 @@ const state = {
 };
 
 // --- GLOBAL VARIABLES ---
-let apiPort = 3000; // Default port, updated by Main process
+let apiPort = 3000; // Porta padrão, atualizada pelo processo Main
 
 // --- UI ELEMENTS ---
 const ui = {
@@ -118,7 +118,7 @@ function initializeApp() {
     loadDataFromLocalFile();
     setupEventListeners();
     
-    // Listen for the API port from the Main process
+    // Ouve a porta da API enviada pelo processo principal
     if (window.electronAPI && window.electronAPI.onSetApiPort) {
         window.electronAPI.onSetApiPort((port) => {
             console.log(`[Renderer] Porta da API definida para: ${port}`);
@@ -172,7 +172,6 @@ function handleChecklistEvent(e) {
         if (file) {
             state.checklist[id] = file;
             renderChecklist(); 
-            // Note: Instant CNPJ analysis removed to favor centralized server analysis
         }
     }
     if (target.closest('button.trash-icon')) {
@@ -188,16 +187,21 @@ function setupEventListeners() {
     setupUploadArea('proposta');
     setupUploadArea('contrato');
     
-    // Main analysis action
+    // Análise
     ui.analyzeBtn.addEventListener('click', handleAnalysis);
    
+    // UI Events
     ui.representanteCheckboxes.addEventListener('change', updateRepresentanteFields);
     ui.respRepetirCheckbox.addEventListener('change', handleRepetirResponsavel);
     ui.respRepCheckboxesContainer.addEventListener('change', updateResponsavelFromSelection);
     ui.toggleDebugBtn.addEventListener('click', () => ui.debugSection.classList.toggle('hidden'));
+    
+    // Botões de Geração (Refatorados)
     ui.generatePdfBtn.addEventListener('click', generatePDF);
     ui.generateExcelBtn.addEventListener('click', generateExcel);
     ui.downloadZipBtn.addEventListener('click', downloadAttachmentsAsZip);
+    
+    // Email e Outros
     ui.sendEmailBtn.addEventListener('click', openEmailModal);
     ui.closeEmailModalBtn.addEventListener('click', () => ui.emailModal.classList.add('hidden'));
     
@@ -378,7 +382,7 @@ function handleFileSelect(file, type) {
     }
 }
 
-// --- CORE ANALYSIS LOGIC (UPDATED FOR BACKEND) ---
+// --- CORE ANALYSIS LOGIC ---
 
 async function handleAnalysis() {
     setLoading(true);
@@ -391,13 +395,11 @@ async function handleAnalysis() {
             throw new Error("Chave da API não encontrada. Por favor, insira sua chave da API do Google AI Studio nas Configurações e salve.");
         }
 
-        // Prepare form data to send files to the backend
         const formData = new FormData();
         formData.append('apiKey', apiKey);
         formData.append('proposta', state.files.proposta);
         formData.append('contrato', state.files.contrato);
 
-        // Check for CNPJ Card in checklist items
         const cartaoCnpjItem = state.checklistItems.find(item => item.text.toUpperCase().includes('CARTÃO DE CNPJ'));
         if (cartaoCnpjItem) {
             const cartaoCnpjFile = state.checklist[String(cartaoCnpjItem.id)];
@@ -409,7 +411,6 @@ async function handleAnalysis() {
 
         console.log(`Enviando requisição para http://localhost:${apiPort}/api/analyze`);
         
-        // Call the Local Express Server
         const response = await fetch(`http://localhost:${apiPort}/api/analyze`, {
             method: 'POST',
             body: formData
@@ -427,7 +428,6 @@ async function handleAnalysis() {
         const data = await response.json();
         console.log("Resposta da análise recebida:", data);
 
-        // Populate form with data received from backend
         populateForm(data);
         
         ui.debugProposta.value = "Texto processado no servidor (Backend).";
@@ -564,241 +564,147 @@ function clearResponsavelFields() {
      formFields.respTelefone.value = '';
 }
 
+// --- DATA COLLECTION HELPER ---
+function getFormData() {
+    // Coleta os dados atuais do checklist para o PDF
+    const checklistData = state.checklistItems.map(item => {
+        const file = state.checklist[item.id];
+        return {
+            text: item.text,
+            status: file ? `[X] Anexado: ${file.name}` : '[ ] Não anexado'
+        };
+    });
+
+    return {
+        servico: formFields.servico.value,
+        razaoSocial: formFields.razaoSocial.value,
+        cnpj: formFields.cnpj.value,
+        endereco: formFields.endereco.value,
+        regraRepresentacao: formFields.regraRepresentacao.value,
+        repNome: formFields.repNome.value,
+        repFuncao: formFields.repFuncao.value,
+        repRg: formFields.repRg.value,
+        repCpf: formFields.repCpf.value,
+        repEmail: formFields.repEmail.value,
+        repTelefone: formFields.repTelefone.value,
+        respNome: formFields.respNome.value,
+        respCpf: formFields.respCpf.value,
+        respEmail: formFields.respEmail.value,
+        respTelefone: formFields.respTelefone.value,
+        test1Nome: formFields.test1Nome.value,
+        test1Cpf: formFields.test1Cpf.value,
+        test1Email: formFields.test1Email.value,
+        test2Nome: formFields.test2Nome.value,
+        test2Cpf: formFields.test2Cpf.value,
+        test2Email: formFields.test2Email.value,
+        tipoInstrumento: formFields.tipoInstrumentoSelect.value,
+        numeroInstrumento: formFields.numeroInstrumento.value,
+        obra: formFields.obraSelect.value,
+        nomeContratada: formFields.nomeContratada.value,
+        objetoContrato: formFields.objetoContrato.value,
+        itensValores: formFields.itensValores.value,
+        prazoExecucao: formFields.prazoExecucao.value,
+        adiantamento: formFields.adiantamentoCheckbox.checked,
+        adiantamentoComment: formFields.adiantamentoComment.value,
+        faturamento: formFields.faturamentoCheckbox.checked,
+        faturamentoComment: formFields.faturamentoComment.value,
+        permuta: formFields.permutaCheckbox.checked,
+        permutaComment: formFields.permutaComment.value,
+        obsContrato: formFields.obsContrato.value,
+        itens: state.itensValoresStructured,
+        checklist: checklistData
+    };
+}
+
+
+// --- GENERATION FUNCTIONS (UPDATED TO USE BACKEND) ---
+
 async function generatePDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    let y;
-    const pageHeight = doc.internal.pageSize.height;
-    const margin = 15;
+    setLoading(true);
+    ui.analysisStatus.textContent = 'Gerando PDF no servidor...';
     
     try {
-        const titleY = 20; 
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Ficha de Qualificação e Contratação', doc.internal.pageSize.width / 2, titleY, { align: 'center' });
-        y = titleY + 15;
-
-        const checkPageBreak = (neededHeight = 10) => {
-            if (y + neededHeight > pageHeight - margin) {
-                doc.addPage();
-                y = 20;
-            }
-        };
-
-        const addSection = (title) => {
-            checkPageBreak(20);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(14);
-            doc.text(title, margin, y);
-            doc.setLineWidth(0.5);
-            doc.line(margin, y + 2, doc.internal.pageSize.width - margin, y + 2);
-            y += 10;
-        };
-
-        const addField = (label, value) => {
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            const labelWidth = doc.getTextWidth(label + ':');
-            const valueX = margin + labelWidth + 2;
-            const valueMaxWidth = doc.internal.pageSize.width - margin - valueX;
-
-            const splitValue = doc.splitTextToSize(value || 'Não preenchido', valueMaxWidth);
-            const fieldHeight = (splitValue.length * 5) + 2;
-
-            checkPageBreak(fieldHeight);
-            
-            doc.text(label + ':', margin, y);
-            doc.setFont('helvetica', 'normal');
-            doc.text(splitValue, valueX, y);
-            y += fieldHeight;
-        };
+        const formData = getFormData();
         
-        addSection('Ficha de Qualificação - Empresa');
-        addField('Serviço', formFields.servico.value);
-        addField('Razão Social', formFields.razaoSocial.value);
-        addField('CNPJ', formFields.cnpj.value);
-        addField('Endereço', formFields.endereco.value);
-        
-        addSection('Ficha de Qualificação - Representantes');
-        addField('Regra de Representação', formFields.regraRepresentacao.value);
-        addField('Nome(s)', formFields.repNome.value);
-        addField('Função(ões)', formFields.repFuncao.value);
-        addField('RG(s) / Órgão(s) Exp.', formFields.repRg.value);
-        addField('CPF(s)', formFields.repCpf.value);
-        addField('E-mail(s)', formFields.repEmail.value);
-        addField('Telefone(s)', formFields.repTelefone.value);
-        
-        addSection('Ficha de Qualificação - Responsável');
-        addField('Nome', formFields.respNome.value);
-        addField('CPF', formFields.respCpf.value);
-        addField('E-mail', formFields.respEmail.value);
-        addField('Telefone', formFields.respTelefone.value);
-        
-        addSection('Ficha de Qualificação - Testemunhas');
-        addField('Nome (Contratante)', formFields.test1Nome.value);
-        addField('CPF (Contratante)', formFields.test1Cpf.value);
-        addField('E-mail (Contratante)', formFields.test1Email.value);
-        y += 3;
-        addField('Nome (Contratada)', formFields.test2Nome.value);
-        addField('CPF (Contratada)', formFields.test2Cpf.value);
-        addField('E-mail (Contratada)', formFields.test2Email.value);
+        const response = await fetch(`http://localhost:${apiPort}/api/generate-pdf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
 
-        addSection('Ficha de Contratação');
-        addField('Tipo de Instrumento', formFields.tipoInstrumentoSelect.value);
-        addField('Número do Instrumento', formFields.numeroInstrumento.value);
-        addField('Obra', formFields.obraSelect.value);
-        addField('Nome da Contratada', formFields.nomeContratada.value);
-        addField('Objeto', formFields.objetoContrato.value);
-        addField('Itens e Valores', formFields.itensValores.value);
-        addField('Prazo de Execução', formFields.prazoExecucao.value);
-        
-        if (formFields.adiantamentoCheckbox.checked) {
-            addField('Adiantamento', 'Sim');
-            if (formFields.adiantamentoComment.value) addField('Comentário Adiant.', formFields.adiantamentoComment.value);
+        if (!response.ok) {
+             const errorText = await response.text();
+             throw new Error(`Erro no servidor: ${errorText}`);
         }
-        if (formFields.faturamentoCheckbox.checked) {
-            addField('Faturamento Direto', 'Sim');
-            if (formFields.faturamentoComment.value) addField('Comentário Fatur.', formFields.faturamentoComment.value);
-        }
-        if (formFields.permutaCheckbox.checked) {
-            addField('Permuta', 'Sim');
-            if (formFields.permutaComment.value) addField('Comentário Permuta', formFields.permutaComment.value);
-        }
-        
-        addField('Observações Gerais', formFields.obsContrato.value);
 
-        addSection('Checklist de Documentação Contratual');
-        for (const item of state.checklistItems) {
-            const file = state.checklist[item.id];
-            const status = file ? `[X] Anexado: ${file.name}` : '[ ] Não anexado';
-            const itemTextMaxWidth = 120;
-            const statusXPosition = margin + itemTextMaxWidth + 4;
-
-            const textLines = doc.splitTextToSize(item.text, itemTextMaxWidth);
-            const statusLines = doc.splitTextToSize(status, doc.internal.pageSize.width - statusXPosition - margin);
-
-            const textHeight = textLines.length * 4;
-            const statusHeight = statusLines.length * 3;
-            const itemHeight = Math.max(textHeight, statusHeight) + 3;
-
-            checkPageBreak(itemHeight);
-
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-            doc.text(textLines, margin + 5, y);
-
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-            doc.text(statusLines, statusXPosition, y);
-            
-            y += itemHeight;
-        }
-        
-        const pdfOutput = doc.output('arraybuffer');
-        const buffer = new Uint8Array(pdfOutput);
+        const blob = await response.blob();
+        const buffer = new Uint8Array(await blob.arrayBuffer());
 
         const filePath = await window.electronAPI.saveFile({
             title: "Salvar Ficha PDF",
-            defaultPath: `Ficha_Completa_${formFields.razaoSocial.value.replace(/ /g,"_") || 'Fornecedor'}.pdf`,
+            defaultPath: `Ficha_${formFields.razaoSocial.value.replace(/[^a-z0-9]/gi, '_') || 'Fornecedor'}.pdf`,
             buttonLabel: "Salvar",
             filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
         });
 
         if (filePath) {
             await window.electronAPI.saveBuffer(filePath, buffer);
+            ui.analysisStatus.textContent = 'PDF Salvo com sucesso!';
+        } else {
+            ui.analysisStatus.textContent = '';
         }
 
     } catch (error) {
-        showError("Falha crítica ao gerar PDF: " + error.message);
-        console.error("PDF Generation failed:", error);
+        console.error(error);
+        showError("Erro ao gerar PDF: " + error.message);
+        ui.analysisStatus.textContent = 'Erro ao gerar PDF.';
+    } finally {
+        setLoading(false);
     }
 }
 
 async function generateExcel() {
+    setLoading(true);
+    ui.analysisStatus.textContent = 'Gerando Excel no servidor...';
+
     try {
-        const wb = XLSX.utils.book_new();
-        const ws_data = [];
+        const formData = getFormData();
 
-        const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FFD9EAD3" } }, border: { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } } };
-        const currencyFormat = '"R$" #,##0.00';
+        const response = await fetch(`http://localhost:${apiPort}/api/generate-excel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
 
-        ws_data.push(['TIPO DE INSTRUMENTO', 'NÚMERO INSTRUMENTO', 'NOME DA CONTRATADA:', 'OBRA:', null, 'OBJETO:']);
-        ws_data.push([formFields.tipoInstrumentoSelect.value, formFields.numeroInstrumento.value, formFields.nomeContratada.value, formFields.obraSelect.value, null, formFields.objetoContrato.value]);
-        ws_data.push([]); 
-        
-        ws_data.push(['ITEM', 'SERVIÇOS', null, null, null, '$ TOTAL']);
-
-        let totalGeral = 0;
-        const items = state.itensValoresStructured || [];
-        if (items.length > 0) {
-            items.forEach(item => {
-                const valorText = item.total || '0';
-                const valor = parseFloat(valorText.replace(/[^0-9,]+/g, "").replace(",", ".")) || 0;
-                ws_data.push([item.item, item.servico, null, null, null, valor]);
-                totalGeral += valor;
-            });
-        }
-        for(let i = items.length; i < 4; i++) { ws_data.push([]); }
-
-        ws_data.push(['TOTAL GERAL', null, null, null, null, totalGeral]);
-        ws_data.push([]);
-        
-        ws_data.push(['Prazo de execução']);
-        ws_data.push(['Início', null, null, 'Comentário:', formFields.prazoExecucao.value]);
-        ws_data.push([]);
-        
-        ws_data.push(['Observações de Contrato:', formFields.obsContrato.value]);
-        ws_data.push([]);
-        
-        ws_data.push(['CONDIÇÕES ESPECIAIS']);
-         ws_data.push(['Adiantamento:', formFields.adiantamentoCheckbox.checked ? 'Sim' : 'Não', 'Comentário:', formFields.adiantamentoComment.value]);
-         ws_data.push(['Faturamento Direto:', formFields.faturamentoCheckbox.checked ? 'Sim' : 'Não', 'Comentário:', formFields.faturamentoComment.value]);
-         ws_data.push(['Permuta:', formFields.permutaCheckbox.checked ? 'Sim' : 'Não', 'Comentário:', formFields.permutaComment.value]);
-
-        const ws = XLSX.utils.aoa_to_sheet(ws_data);
-
-        ws['A1'].s = ws['B1'].s = ws['C1'].s = ws['D1'].s = ws['F1'].s = headerStyle;
-        ws['A4'].s = ws['B4'].s = ws['F4'].s = headerStyle;
-        
-        const totalRow = 8;
-        ws[`A${totalRow+1}`].s = ws[`F${totalRow+1}`].s = headerStyle;
-        ws[`F${totalRow+1}`].t = 'n';
-        ws[`F${totalRow+1}`].z = currencyFormat;
-
-        for(let i = 0; i < items.length; i++){
-            const row = 5 + i;
-             ws[`F${row}`].t = 'n';
-             ws[`F${row}`].z = currencyFormat;
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erro no servidor: ${errorText}`);
         }
 
-        ws['!merges'] = [
-            { s: { r: 1, c: 5 }, e: { r: 1, c: 8 } }, { s: { r: 3, c: 1 }, e: { r: 3, c: 4 } },
-            { s: { r: totalRow, c: 0 }, e: { r: totalRow, c: 4 } }, { s: { r: totalRow + 2, c: 0 }, e: { r: totalRow + 2, c: 5 } },
-            { s: { r: totalRow + 3, c: 4 }, e: { r: totalRow + 3, c: 8 } }, { s: { r: totalRow + 5, c: 1 }, e: { r: totalRow + 5, c: 8 } },
-            { s: { r: totalRow + 7, c: 0 }, e: { r: totalRow + 7, c: 5 } }, { s: { r: totalRow + 8, c: 3 }, e: { r: totalRow + 8, c: 8 } },
-            { s: { r: totalRow + 9, c: 3 }, e: { r: totalRow + 9, c: 8 } }, { s: { r: totalRow + 10, c: 3 }, e: { r: totalRow + 10, c: 8 } }, 
-        ];
-        for(let i=0; i < items.length; i++) {
-            ws['!merges'].push({ s: { r: 4 + i, c: 1 }, e: { r: 4 + i, c: 4 } });
-        }
+        const blob = await response.blob();
+        const buffer = new Uint8Array(await blob.arrayBuffer());
 
-        XLSX.utils.book_append_sheet(wb, ws, 'Ficha de Contratacao');
-        
-        const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' }); 
         const filePath = await window.electronAPI.saveFile({
             title: "Salvar Ficha Excel",
-            defaultPath: `Ficha_de_Contratacao_${formFields.nomeContratada.value.replace(/ /g,"_") || 'Fornecedor'}.xlsx`,
+            defaultPath: `Ficha_${formFields.razaoSocial.value.replace(/[^a-z0-9]/gi, '_') || 'Fornecedor'}.xlsx`,
             buttonLabel: "Salvar",
             filters: [{ name: 'Excel Files', extensions: ['xlsx'] }]
         });
 
         if (filePath) {
-            await window.electronAPI.saveBuffer(filePath, new Uint8Array(buffer)); 
+            await window.electronAPI.saveBuffer(filePath, buffer);
+            ui.analysisStatus.textContent = 'Excel Salvo com sucesso!';
+        } else {
+             ui.analysisStatus.textContent = '';
         }
     } catch (error) {
-        showError("Falha crítica ao gerar Excel: " + error.message);
-        console.error("Excel Generation failed:", error);
+        console.error(error);
+        showError("Erro ao gerar Excel: " + error.message);
+        ui.analysisStatus.textContent = 'Erro ao gerar Excel.';
+    } finally {
+        setLoading(false);
     }
 }
-
 
 async function downloadAttachmentsAsZip() {
     const attachedFiles = Object.values(state.checklist);
@@ -807,41 +713,50 @@ async function downloadAttachmentsAsZip() {
     }
 
     setLoading(true);
-    ui.analysisStatus.textContent = 'Gerando arquivo .zip...';
+    ui.analysisStatus.textContent = 'Compactando arquivos no servidor...';
+
     try {
-        const zip = new JSZip();
-        for (const file of attachedFiles) {
-            if (file instanceof File) {
-                const content = await file.arrayBuffer(); 
-                if (content) {
-                    zip.file(file.name, content);
-                }
-            } else {
-                 console.warn(`Item no checklist não é um objeto File: ${file.name}`);
-            }
+        // No Electron, objetos File têm a propriedade .path (caminho absoluto)
+        const filePaths = attachedFiles.map(f => f.path);
+
+        const response = await fetch(`http://localhost:${apiPort}/api/generate-zip`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePaths })
+        });
+
+        if (!response.ok) {
+             const errorText = await response.text();
+             throw new Error(`Erro no servidor: ${errorText}`);
         }
 
-        const zipContent = await zip.generateAsync({ type: 'uint8array' }); 
-        
+        const blob = await response.blob();
+        const buffer = new Uint8Array(await blob.arrayBuffer());
+
         const filePath = await window.electronAPI.saveFile({
             title: "Salvar Anexos .zip",
-            defaultPath: `Anexos_${formFields.razaoSocial.value.replace(/ /g,"_") || 'Fornecedor'}.zip`,
+            defaultPath: `Anexos_${formFields.razaoSocial.value.replace(/[^a-z0-9]/gi, '_') || 'Fornecedor'}.zip`,
             buttonLabel: "Salvar",
             filters: [{ name: 'Zip Files', extensions: ['zip'] }]
         });
         
         if (filePath) {
-            await window.electronAPI.saveBuffer(filePath, zipContent);
+            await window.electronAPI.saveBuffer(filePath, buffer);
+            ui.analysisStatus.textContent = 'ZIP Salvo com sucesso!';
+        } else {
+            ui.analysisStatus.textContent = '';
         }
 
     } catch (error) {
-        showError("Erro ao gerar o arquivo .zip: " + error.message);
         console.error(error);
+        showError("Erro ao gerar o arquivo .zip: " + error.message);
+        ui.analysisStatus.textContent = 'Erro ao gerar ZIP.';
     } finally {
         setLoading(false);
     }
 }
 
+// --- HELPERS ---
 
 function openEmailModal() {
     if (!formFields.razaoSocial.value) {

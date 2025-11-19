@@ -24,11 +24,14 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+    "jspdf": "^3.0.3",
+    "jszip": "^3.10.1",
     "mammoth": "^1.11.0",
     "multer": "^2.0.2",
     "pdf-parse": "^2.4.5",
     "portfinder": "^1.0.38",
-    "tesseract.js": "^6.0.1"
+    "tesseract.js": "^6.0.1",
+    "xlsx": "^0.18.5"
   },
   "build": {
     "appId": "com.jurivalida.app",
