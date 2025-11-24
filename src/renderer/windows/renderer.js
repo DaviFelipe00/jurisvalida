@@ -363,7 +363,16 @@ function setupUploadArea(type) {
     const uploadArea = document.getElementById(`upload-${type}`);
     const fileInput = document.getElementById(`file-${type}`);
     
-    uploadArea.addEventListener('click', () => fileInput.click());
+    // CORREÇÃO: Verificação adicionada para evitar duplo disparo
+    uploadArea.addEventListener('click', (e) => {
+        // Se o clique foi no label ou no próprio input (ou elementos dentro deles),
+        // o navegador já vai abrir a janela nativamente. Não execute o click via JS.
+        if (e.target.closest('label') || e.target.closest('input')) {
+            return;
+        }
+        fileInput.click();
+    });
+
     fileInput.addEventListener('change', (e) => handleFileSelect(e.target.files[0], type));
 
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
