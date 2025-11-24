@@ -1,41 +1,60 @@
-const pdfParse = require('pdf-parse').default || require('pdf-parse');
-const mammoth = require('mammoth');
-const Tesseract = require('tesseract.js');
 const fs = require('fs').promises;
+const mammoth = require('mammoth');
+let pdfParse = require('pdf-parse');
+
+// Garantir função correta em qualquer ambiente
+pdfParse = pdfParse?.default ?? pdfParse;
 
 async function extractText(filePath, mimeType) {
+    console.log("[extractText] File:", filePath);
+    console.log("[extractText] MIME:", mimeType);
+
     try {
         const buffer = await fs.readFile(filePath);
+        console.log("[extractText] File loaded, size:", buffer.length);
 
-        // PDF
         if (mimeType === 'application/pdf') {
-            const data = await pdfParse(buffer);
-            let text = data.text || "";
+            console.log("[extractText] Processing PDF...");
 
-            if (text.trim().length < 150) {
-                console.log("PDF de imagem detectado, iniciando OCR...");
-                const ocr = await Tesseract.recognize(buffer, 'por');
-                return ocr.data.text;
+            try {
+                if (typeof pdfParse !== "function") {
+                    console.error("[extractText] pdfParse is NOT a function!", pdfParse);
+                }
+
+                const data = await pdfParse(buffer);
+
+                console.log("[extractText] PDF parsed successfully");
+                return data.text || "";
+            } catch (pdfError) {
+                console.error("Error reading PDF:", pdfError.stack || pdfError.message);
+                return "";
             }
-
-            return text;
         }
 
-        // DOCX
         if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            const result = await mammoth.extractRawText({ buffer });
-            return result.value || "";
+            console.log("[extractText] Processing DOCX...");
+
+            try {
+                const result = await mammoth.extractRawText({ buffer });
+                console.log("[extractText] DOCX parsed successfully");
+                return result.value || "";
+            } catch (docxError) {
+                console.error("Error reading DOCX:", docxError.stack || docxError.message);
+                return "";
+            }
         }
 
-        // TXT
-        if (mimeType === 'text/plain') {
+        if (mimeType === 'text/plain' || mimeType === 'application/json') {
+            console.log("[extractText] Processing TEXT/JSON...");
             return buffer.toString('utf-8');
         }
 
+        console.warn(`[UTILS] Unsupported MIME type: ${mimeType}`);
         return "";
+
     } catch (error) {
-        console.error("Erro na extração:", error);
-        throw new Error(`Falha ao ler arquivo: ${error.message}`);
+        console.error(`General extraction error (${filePath}):`, error.stack || error.message);
+        return ""; 
     }
 }
 
