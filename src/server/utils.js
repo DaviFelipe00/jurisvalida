@@ -8,16 +8,23 @@ async function extractText(filePath, mimeType) {
         const buffer = await fs.readFile(filePath);
 
         if (mimeType === 'application/pdf') {
-            const data = await pdfParse(buffer);
-            let text = data.text;
+            try {
+                const data = await pdfParse(buffer);
+                let text = data.text;
 
-            // Se houver pouco texto, tenta OCR (lógica similar ao seu front)
-            if (text.trim().length < 150) {
-                console.log("PDF imagem detectado, iniciando OCR...");
-                const { data: { text: ocrText } } = await Tesseract.recognize(buffer, 'por');
-                return ocrText;
+                // CORREÇÃO: Removemos a tentativa de OCR em PDF aqui pois o Tesseract
+                // não lê PDFs diretamente e converter PDF->Imagem no servidor é complexo.
+                // Se o texto for curto, apenas retornamos o que foi possível extrair.
+                if (text.trim().length < 50) {
+                    console.warn("Aviso: Pouco ou nenhum texto extraído do PDF (pode ser uma imagem digitalizada).");
+                    // Opcional: Adicionar um aviso no texto para o Gemini saber
+                    return "[ALERTA: Este documento parece ser uma imagem digitalizada e o texto não pôde ser extraído completamente via servidor.] " + text;
+                }
+                return text;
+            } catch (pdfError) {
+                console.error("Erro ao processar estrutura do PDF:", pdfError);
+                return "";
             }
-            return text;
         } 
         else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') { // DOCX
             const result = await mammoth.extractRawText({ buffer: buffer });
@@ -26,10 +33,18 @@ async function extractText(filePath, mimeType) {
         else if (mimeType === 'text/plain') {
             return buffer.toString('utf-8');
         }
+        // Suporte a Imagens (JPG/PNG) - Aqui o Tesseract funciona!
+        else if (mimeType.startsWith('image/')) {
+            console.log("Imagem detectada, iniciando OCR...");
+            const { data: { text: ocrText } } = await Tesseract.recognize(buffer, 'por');
+            return ocrText;
+        }
+
         return "";
     } catch (error) {
-        console.error("Erro na extração:", error);
-        throw new Error(`Falha ao ler arquivo: ${error.message}`);
+        console.error("Erro na extração geral:", error);
+        // Não lançar erro para não travar o controller, retornar string vazia
+        return ""; 
     }
 }
 

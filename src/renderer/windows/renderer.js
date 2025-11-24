@@ -105,7 +105,7 @@ const formFields = {
 
 // --- INITIALIZATION ---
 
-function initializeApp() {
+async function initializeApp() {
     const defaultChecklistItems = [
         "1 – CÓPIA DO CARTÃO DE CNPJ", "2 – CÓPIA DO CARTÃO DE INSCRIÇÃO ESTADUAL", "3 – CÓPIA DO CARTÃO DE INSCRIÇÃO MUNICIPAL (SERVIÇOS)",
         "4 – CÓPIA DO ESTATUTO SOCIAL OU CONTRATO SOCIAL", "5 – DADOS BANCÁRIOS (PESSOA JURÍDICA)", "6 – PROCURAÇÃO COM FIRMA RECONHECIDA DO RESPONSÁVEL*",
@@ -118,10 +118,21 @@ function initializeApp() {
     loadDataFromLocalFile();
     setupEventListeners();
     
-    // Listen for the API port from the Main process
+    // CORREÇÃO AQUI: Buscar a porta da API de forma proativa
+    try {
+        const port = await window.electronAPI.getApiPort();
+        if (port) {
+            apiPort = port;
+            console.log(`[Renderer] Porta da API obtida via invoke: ${apiPort}`);
+        }
+    } catch (error) {
+        console.error("Erro ao obter porta da API:", error);
+    }
+
+    // Mantém o listener antigo como backup
     if (window.electronAPI && window.electronAPI.onSetApiPort) {
         window.electronAPI.onSetApiPort((port) => {
-            console.log(`[Renderer] Porta da API definida para: ${port}`);
+            console.log(`[Renderer] Porta da API definida via evento: ${port}`);
             apiPort = port;
         });
     }

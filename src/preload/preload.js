@@ -16,5 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
 
     // New: Listener to receive the API Port from Main
-    onSetApiPort: (callback) => ipcRenderer.on('set-api-port', (_event, port) => callback(port))
+    onSetApiPort: (callback) => ipcRenderer.on('set-api-port', (_event, port) => callback(port)),
+
+    // CORREÇÃO AQUI: Expor a função para buscar a porta ativamente
+    getApiPort: () => ipcRenderer.invoke('get-api-port')
 });

@@ -222,6 +222,11 @@ app.whenReady().then(async () => {
         shell.openPath(userDataPath);
     });
 
+    // CORREÇÃO AQUI: Handler para o frontend pedir a porta da API
+    ipcMain.handle('get-api-port', async () => {
+        return apiPort;
+    });
+
     // --- REGISTER LOGIN HANDLERS ---
     registerAuthHandlers({
         ipcMain,
